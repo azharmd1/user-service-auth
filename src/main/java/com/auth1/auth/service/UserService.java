@@ -1,10 +1,13 @@
 package com.auth1.auth.service;
 
+import com.auth1.auth.dtos.SendEmailMessageDto;
 import com.auth1.auth.models.Token;
 import com.auth1.auth.models.User;
 import com.auth1.auth.repository.TokenRepository;
 import com.auth1.auth.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.Calendar;
@@ -14,7 +17,8 @@ import java.util.UUID;
 
 @Service
 public class UserService {
-
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
     @Autowired
     private UserRepository userRepository;
 
@@ -24,14 +28,26 @@ public class UserService {
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
 
-
+    @Autowired
+    private ObjectMapper objectMapper;
     public User signUp(String email, String password, String name){
 
         User user = new User();
         user.setEmail(email);
         user.setName(name);
         user.setPassword(bCryptPasswordEncoder.encode(password));
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        SendEmailMessageDto sendEmailMessageDto = new SendEmailMessageDto();
+        sendEmailMessageDto.setFrom("email");
+        sendEmailMessageDto.setTo(email);
+        sendEmailMessageDto.setSubject("Welcome to the app");
+        sendEmailMessageDto.setBody("Welcome to the app");
+       try {
+                kafkaTemplate.send("sendEmail", objectMapper.writeValueAsString(sendEmailMessageDto));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        return savedUser;
     }
 
     public Token login(String email, String password) {
